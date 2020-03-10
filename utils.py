@@ -18,22 +18,32 @@ def Gauss_density(observation=0,mean=0,var=1):
 
     return 1/np.sqrt(2*math.pi*var)*np.exp(-(observation-mean)**2/2/var)
 
+def Gauss_density_log(observation=0,mean=0,var=1):
+
+    return -(observation-mean)**2/2/var - 1/2*np.log(2*math.pi*var)
+
 
 def true_posterior(y,prior_mean=0,prior_var=100, mix1_var = 1,mix2_var=5, shift=10):
     x_samples = np.linspace(-10, 20, 1e6) # for numeraical integration. in fact for this toy problem, closed solution exists.
 
-    Posterior = Gauss_density(x_samples, prior_mean, prior_var)
+    #Posterior = Gauss_density(x_samples, prior_mean, prior_var)
+    post_density_log = Gauss_density_log(x_samples, prior_mean, prior_var)  # prior factor
 
     for yi in y:
-        Posterior = Posterior * (
+        # transform to log domain to avoid numerical issue
+        post_density_log = post_density_log + np.log(
                     0.5 * Gauss_density(yi, x_samples, mix1_var) + 0.5 * Gauss_density(yi, x_samples + shift, mix2_var))
 
-        post_mean = np.sum(Posterior * x_samples) / np.sum(Posterior)
-        post_var = np.sum(Posterior * ((x_samples - post_mean) ** 2)) / np.sum(Posterior)
+    post_density_log = post_density_log - max(post_density_log)
 
+    Posterior = np.exp(post_density_log)
     NormFactor = np.sum(Posterior)
 
     Posterior = Posterior / NormFactor
+
+    post_mean = np.sum(Posterior * x_samples)
+    post_var = np.sum(Posterior * ((x_samples - post_mean) ** 2))
+
 
     return post_mean,post_var, Posterior
 
@@ -42,20 +52,21 @@ def true_posterior(y,prior_mean=0,prior_var=100, mix1_var = 1,mix2_var=5, shift=
 # function of the naive Gaussian approximation of Belief Propagation (BP)
 def naivegauss_approximate(y,prior_mean=0,prior_var=100, mix1_var = 1,mix2_var=5, shift=10):
     x_samples = np.linspace(-10, 20, 1e6)
-    post_density_app = Gauss_density(x_samples, prior_mean, prior_var)  # prior factor
-
+    post_density_app_log = Gauss_density_log(x_samples, prior_mean, prior_var)  # prior factor
     for yi in y:
         temp_mean = 0.5*yi + 0.5*(yi-shift)
         temp_var = 0.5**2*mix1_var + 0.5**2*mix2_var
-        post_density_app = post_density_app * Gauss_density(x_samples, temp_mean, temp_var)  # prior factor
+        #post_density_app = post_density_app * Gauss_density(x_samples, temp_mean, temp_var)  # prior factor
+        post_density_app_log = post_density_app_log + Gauss_density_log(x_samples, temp_mean, temp_var)  # transform to log domain to avoid numerical issue
 
+    post_density_app_log = post_density_app_log - max(post_density_app_log)
+
+    post_density_app = np.exp(post_density_app_log)
     post_density_app = post_density_app/np.sum(post_density_app)
 
     post_mean = np.sum(post_density_app * x_samples)
     post_var = np.sum(post_density_app * ((x_samples - post_mean) ** 2))
 
-    #post_var = 1 / (np.sum(1 / vars_separate) + 1 / prior_var)
-    #post_mean = post_var * (np.sum(means_separate / vars_separate) + prior_mean / prior_var)
 
 
     return post_mean, post_var, post_density_app
